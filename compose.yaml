@@ -1,0 +1,13 @@
+services:
+  hakoniwa-perl:
+    build:
+      context: .
+    ports:
+      - "8080:80"
+    environment:
+      HAKONIWA_BASE_URL: "http://localhost:8080"
+    volumes:
+      - hakoniwa-data:/var/www/hako/data
+
+volumes:
+  hakoniwa-data:

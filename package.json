@@ -1,0 +1,10 @@
+{
+  "name": "hakoniwa-modern",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "pnpm run build && node --test packages/core/dist/**/*.test.js"
+  },
+  "devDependencies": {}
+}
