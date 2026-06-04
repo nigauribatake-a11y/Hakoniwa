@@ -2,16 +2,16 @@ import {
   type CommandPlan,
   type CommandResult,
   type GameState,
+  type GameRules,
   type Island,
   type RandomSource,
   type TurnLog,
   type TurnResult
 } from "./model.js";
 import {
-  TURN_SECONDS,
   applyIncome,
   cloneCells,
-  commandCosts,
+  defaultGameRules,
   estimateIsland,
   getCell,
   isCoast,
@@ -19,6 +19,11 @@ import {
   shiftCommandQueue,
   updateCells
 } from "./rules.js";
+
+export interface AdvanceTurnOptions {
+  random?: RandomSource;
+  rules?: GameRules;
+}
 
 export class DeterministicRandom implements RandomSource {
   private state: number;
@@ -36,21 +41,26 @@ export class DeterministicRandom implements RandomSource {
 
 export function advanceTurn(
   state: GameState,
-  random: RandomSource = new DeterministicRandom(state.turn + 1)
+  options: AdvanceTurnOptions | RandomSource = {}
 ): TurnResult {
+  const rules = "nextInt" in options ? defaultGameRules : options.rules ?? defaultGameRules;
+  const random =
+    "nextInt" in options ? options : options.random ?? new DeterministicRandom(state.turn + 1);
   const logs: TurnLog[] = [];
   const islands = state.islands.map((island) => {
-    let current = applyIncome(estimateIsland(island));
+    let current = applyIncome(estimateIsland(island), rules);
 
     while (true) {
-      const result = executeNextCommand(current);
+      const result = executeNextCommand(current, rules);
       current = result.island;
       logs.push(...result.commandResult.logs);
 
       if (result.commandResult.consumeTurn) break;
     }
 
-    current = updateCells(current, random);
+    const cellUpdate = updateCells(current, random, rules, state.turn);
+    current = cellUpdate.island;
+    logs.push(...cellUpdate.logs);
     return estimateIsland(current);
   });
 
@@ -58,20 +68,23 @@ export function advanceTurn(
     state: {
       ...state,
       turn: state.turn + 1,
-      lastTurnAt: state.lastTurnAt + TURN_SECONDS,
+      lastTurnAt: state.lastTurnAt + rules.turnSeconds,
       islands
     },
     logs
   };
 }
 
-export function executeNextCommand(island: Island): {
+export function executeNextCommand(
+  island: Island,
+  rules: GameRules = defaultGameRules
+): {
   island: Island;
   commandResult: CommandResult;
 } {
   const { command, queue } = shiftCommandQueue(island.commandQueue);
   const baseIsland = { ...island, commandQueue: queue };
-  const result = executeCommand(baseIsland, command);
+  const result = executeCommand(baseIsland, command, rules);
 
   return {
     island: result.island,
@@ -81,7 +94,8 @@ export function executeNextCommand(island: Island): {
 
 export function executeCommand(
   island: Island,
-  command: CommandPlan
+  command: CommandPlan,
+  rules: GameRules = defaultGameRules
 ): {
   island: Island;
   commandResult: CommandResult;
@@ -91,7 +105,7 @@ export function executeCommand(
       island: {
         ...island,
         absentTurns: island.absentTurns + 1,
-        money: island.money + 100
+        money: island.money + rules.supportMoneyBase
       },
       commandResult: {
         success: true,
@@ -101,7 +115,7 @@ export function executeCommand(
     };
   }
 
-  const cost = commandCosts[command.kind];
+  const cost = rules.commandCosts[command.kind];
   if (island.money < cost) {
     return {
       island,
@@ -222,6 +236,26 @@ export function executeCommand(
       cell.value += 5;
       return success(changed, cost, command, true);
     }
+
+    case "buildMissileBase": {
+      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
+        return failure(island, command, "can only build missile base on plains or waste");
+      }
+
+      cell.terrain = "missileBase";
+      cell.value = 0;
+      return success(changed, cost, command, true);
+    }
+
+    case "buildMonument": {
+      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
+        return failure(island, command, "can only build monument on plains or waste");
+      }
+
+      cell.terrain = "monument";
+      cell.value = command.arg ?? 0;
+      return success(changed, cost, command, true);
+    }
   }
 }
 
@@ -261,7 +295,7 @@ function failure(
     island,
     commandResult: {
       success: false,
-      consumeTurn: false,
+      consumeTurn: island.invalidCommandPolicy === "consume",
       logs: [log(island, `${island.name} failed ${command.kind}: ${reason}.`)]
     }
   };

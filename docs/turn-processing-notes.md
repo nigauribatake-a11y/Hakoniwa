@@ -165,8 +165,8 @@ Use a reduced command set before porting R.A. extras:
 - Build farm
 - Build factory
 - Mine development
-- Build missile base later
-- Build monument later
+- Build missile base
+- Build monument
 
 Old command IDs from `hako-main.cgi`:
 
@@ -269,28 +269,63 @@ play becomes a core design pillar.
 
 - Should the new game keep six-hour fixed turns, or allow admin-configurable
   schedules?
+  - Decision: keep the default at six hours, but make it configurable.
 - Should invalid commands consume the turn? The old behavior often skips to
   the next command. This is friendly but can surprise players.
+  - Decision: make this a player/island preference. `skip` preserves old-style
+    friendly behavior; `consume` makes failures end the turn.
 - Should R.A.'s cost scaling by score/facilities be kept? It adds depth but
   makes early balancing harder.
+  - Decision: avoid deep score/facility cost scaling in the early game.
 - How much randomness should remain in income and events?
+  - Decision: keep the randomness that belongs to basic Hakoniwa systems first.
 - Should disasters be enabled by default in MVP, or introduced after the core
   economy is fun?
+  - Decision: disasters can be enabled by default, but are blocked during a
+    configurable beginner grace period.
 
-## Next Spec Tasks
+## Progression And Unlocks
 
-1. Extract terrain IDs and translate them into a modern `TerrainKind` list.
-2. Extract core command costs from `HcomCost`.
-3. Spec the MVP economy:
+The new implementation should not expose the full R.A.-scale command surface at
+the start. Commands should unlock through a technology tree or quest-like
+conditions, such as building a required number of facilities or reaching a
+milestone. This lets R.A. systems return gradually while keeping onboarding
+close to a Factorio-style guided progression.
+
+Facilities should be designed with future upgrades in mind:
+
+- Repeated farm/factory construction can increase a facility level.
+- Farm levels can double as typhoon durability.
+- Factories can later evolve into production-focused, forest-hybrid, or other
+  specialized variants.
+
+Phase 1 does not need the full progression engine. It only needs the core model
+to avoid blocking this direction later.
+
+## Phase 1 Implementation Status
+
+First-pass TypeScript coverage now exists for:
+
+1. Terrain IDs translated into `TerrainKind`.
+2. Core command costs collected in `defaultGameRules.commandCosts`.
+3. MVP economy:
    - income
-   - food production
+   - food production and consumption
    - population growth
    - forest growth
-4. Spec basic disasters:
+   - starvation damage
+4. Basic disasters:
    - earthquake
+   - fire
    - typhoon
    - tsunami
    - eruption
    - meteor
-5. Create TypeScript interfaces for `Island`, `Cell`, `CommandPlan`, and
+5. Beginner disaster grace turns.
+6. Player-selectable invalid command behavior.
+7. TypeScript interfaces for `Island`, `Cell`, `CommandPlan`, `GameRules`, and
    `TurnResult`.
+
+Phase 1 is now complete enough for a playable core simulation. Remaining
+follow-up work is to decide which logs should stay internal English messages
+and which should become player-facing Japanese templates.

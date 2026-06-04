@@ -23,7 +23,11 @@ export type CommandKind =
   | "plant"
   | "buildFarm"
   | "buildFactory"
-  | "developMine";
+  | "developMine"
+  | "buildMissileBase"
+  | "buildMonument";
+
+export type InvalidCommandPolicy = "skip" | "consume";
 
 export interface Cell {
   x: number;
@@ -52,6 +56,7 @@ export interface Island {
   factorySize: number;
   mineSize: number;
   absentTurns: number;
+  invalidCommandPolicy: InvalidCommandPolicy;
   cells: Cell[][];
   commandQueue: CommandPlan[];
 }
@@ -80,4 +85,32 @@ export interface TurnResult {
 
 export interface RandomSource {
   nextInt(maxExclusive: number): number;
+}
+
+export interface GameRules {
+  turnSeconds: number;
+  commandQueueLength: number;
+  initialMoney: number;
+  initialFood: number;
+  supportMoneyBase: number;
+  foodProductionPerFarmCapacity: number;
+  foodConsumptionPerPopulation: number;
+  moneyProductionPerIndustryCapacity: number;
+  forestGrowthPerTurn: number;
+  forestMaxValue: number;
+  townGrowthChancePer100: number;
+  townMaxValue: number;
+  starvationTownLoss: number;
+  disasterGraceTurns: number;
+  earthquakeChancePer1000: number;
+  fireChancePer1000: number;
+  tsunamiChancePer1000: number;
+  typhoonChancePer1000: number;
+  meteorChancePer1000: number;
+  eruptionChancePer1000: number;
+  initialForests: number;
+  initialTowns: number;
+  initialMountains: number;
+  initialMissileBases: number;
+  commandCosts: Record<CommandKind, number>;
 }

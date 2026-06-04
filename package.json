@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "test": "pnpm run build && node --test packages/core/dist/**/*.test.js"
+    "test": "pnpm run build && node --test packages/core/dist/**/*.test.js packages/db/dist/**/*.test.js"
   },
   "devDependencies": {}
 }
