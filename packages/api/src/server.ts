@@ -25,6 +25,13 @@ async function handleHttpRequest(
   response: ServerResponse,
   repository: PostgresGameRepository
 ): Promise<void> {
+  if (request.method === "OPTIONS") {
+    writeCorsHeaders(response);
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+
   const body = await readJsonBody(request);
   const url = new URL(request.url ?? "/", "http://localhost");
   const result = await handleApiRequest(
@@ -38,8 +45,14 @@ async function handleHttpRequest(
 
   response.statusCode = result.status;
   response.setHeader("content-type", "application/json; charset=utf-8");
-  response.setHeader("access-control-allow-origin", "*");
+  writeCorsHeaders(response);
   response.end(JSON.stringify(result.body));
+}
+
+function writeCorsHeaders(response: ServerResponse): void {
+  response.setHeader("access-control-allow-origin", "*");
+  response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+  response.setHeader("access-control-allow-headers", "content-type");
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
