@@ -13,7 +13,12 @@ declare module "node:test" {
 }
 
 declare const process: {
+  env: Record<string, string | undefined>;
+  exitCode?: number;
   stdout: {
+    write(text: string): void;
+  };
+  stderr: {
     write(text: string): void;
   };
 };

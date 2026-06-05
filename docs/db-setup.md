@@ -59,7 +59,30 @@ docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select count(*) fr
 docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select count(*) from command_queue;"
 ```
 
-## 5. Useful Commands
+## 5. Advance One Turn From DB
+
+PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:turn
+```
+
+WSL/bash:
+
+```bash
+export DATABASE_URL="postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:turn
+```
+
+Confirm the turn advanced:
+
+```bash
+docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select turn from game_state;"
+docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select turn, message from turn_logs order by id desc limit 5;"
+```
+
+## 6. Useful Commands
 
 Open a SQL prompt:
 
