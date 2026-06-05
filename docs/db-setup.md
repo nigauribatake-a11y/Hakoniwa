@@ -82,7 +82,56 @@ docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select turn from g
 docker compose exec postgres psql -U hakoniwa -d hakoniwa -c "select turn, message from turn_logs order by id desc limit 5;"
 ```
 
-## 6. Useful Commands
+## 6. Queue a Command
+
+PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:queue -- 1 0 plant 6 5
+pnpm run db:turn
+```
+
+WSL/bash:
+
+```bash
+export DATABASE_URL="postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:queue -- 1 0 plant 6 5
+pnpm run db:turn
+```
+
+The argument format is:
+
+```text
+pnpm run db:queue -- <islandId> <position> <kind> <x> <y> [arg]
+```
+
+For example, monument kind `3`:
+
+```bash
+pnpm run db:queue -- 1 0 buildMonument 6 5 3
+```
+
+## 7. Run DB Command Smoke Test
+
+This resets the local game snapshot repeatedly and checks several commands
+through PostgreSQL. Use it only when local development data can be overwritten.
+
+PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:smoke
+```
+
+WSL/bash:
+
+```bash
+export DATABASE_URL="postgres://hakoniwa:hakoniwa_dev_password@localhost:5432/hakoniwa"
+pnpm run db:smoke
+```
+
+## 8. Useful Commands
 
 Open a SQL prompt:
 

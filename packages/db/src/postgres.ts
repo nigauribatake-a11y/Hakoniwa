@@ -1,6 +1,9 @@
 import pg, { type Pool as PgPool, type PoolClient as PgPoolClient } from "pg";
 import type {
   CommandKind,
+  CommandPlan,
+  GameRules,
+  GameState,
   InvalidCommandPolicy,
   TerrainKind,
   TurnResult
@@ -55,15 +58,7 @@ export class PostgresGameRepository implements GameRepository {
 
     try {
       await client.query("begin");
-      await client.query("delete from command_queue");
-      await client.query("delete from island_cells");
-      await client.query("delete from islands");
-      await client.query("delete from game_state");
-
-      await insertGameState(client, rows.gameState);
-      for (const island of rows.islands) await insertIsland(client, island);
-      for (const cell of rows.cells) await insertCell(client, cell);
-      for (const command of rows.commandQueue) await insertCommand(client, command);
+      await replaceSnapshotRows(client, rows);
       for (const log of result.logs) {
         await client.query(
           "insert into turn_logs (turn, island_id, message) values ($1, $2, $3)",
@@ -77,6 +72,56 @@ export class PostgresGameRepository implements GameRepository {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  async saveGameState(
+    state: GameState,
+    rules: GameRules,
+    options: { clearLogs?: boolean } = {}
+  ): Promise<void> {
+    const rows = gameStateToRows(state, rules);
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("begin");
+      if (options.clearLogs) {
+        await client.query("delete from turn_logs");
+      }
+      await replaceSnapshotRows(client, rows);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async setCommand(
+    islandId: string,
+    position: number,
+    command: CommandPlan
+  ): Promise<void> {
+    const result = await this.pool.query(
+      [
+        "update command_queue",
+        "set kind = $3, x = $4, y = $5, target_island_id = $6, arg = $7",
+        "where island_id = $1 and position = $2"
+      ].join(" "),
+      [
+        islandId,
+        position,
+        command.kind,
+        command.x,
+        command.y,
+        command.targetIslandId ?? null,
+        command.arg ?? null
+      ]
+    );
+
+    if (result.rowCount !== 1) {
+      throw new Error(`command slot not found: island=${islandId}, position=${position}`);
     }
   }
 
@@ -153,6 +198,21 @@ export class PostgresGameRepository implements GameRepository {
       arg: row.arg === null ? null : Number(row.arg)
     }));
   }
+}
+
+async function replaceSnapshotRows(
+  client: PgPoolClient,
+  rows: GameStateRows
+): Promise<void> {
+  await client.query("delete from command_queue");
+  await client.query("delete from island_cells");
+  await client.query("delete from islands");
+  await client.query("delete from game_state");
+
+  await insertGameState(client, rows.gameState);
+  for (const island of rows.islands) await insertIsland(client, island);
+  for (const cell of rows.cells) await insertCell(client, cell);
+  for (const command of rows.commandQueue) await insertCommand(client, command);
 }
 
 async function insertGameState(client: PgPoolClient, row: GameStateRow): Promise<void> {
