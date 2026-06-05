@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api:start": "pnpm run build && node packages/api/dist/server.js",
     "build": "tsc -b",
     "db:queue": "pnpm run build && node packages/db/dist/set-command-db.js",
     "db:smoke": "pnpm run build && node packages/db/dist/smoke-db.js",
     "db:turn": "pnpm run build && node packages/db/dist/advance-turn-db.js",
     "db:seed:sql": "pnpm run build && node packages/db/dist/seed-sql.js",
-    "test": "pnpm run build && node --test packages/core/dist/**/*.test.js packages/db/dist/**/*.test.js"
+    "test": "pnpm run build && node --test packages/core/dist/**/*.test.js packages/db/dist/**/*.test.js packages/api/dist/**/*.test.js"
   },
   "dependencies": {
     "pg": "^8.21.0"
