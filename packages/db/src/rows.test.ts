@@ -9,6 +9,7 @@ import {
 } from "../../core/dist/index.js";
 import { InMemoryGameRepository } from "./repository.js";
 import { gameStateToRows, rowsToGameState } from "./rows.js";
+import { snapshotToSql } from "./sql.js";
 
 test("serializes and restores game state rows", () => {
   const rules = createGameRules({ disasterGraceTurns: 10 });
@@ -53,4 +54,24 @@ test("repository saves turn result and appends logs", async () => {
 
   assert.equal(saved.state.turn, 2);
   assert.equal(repository.getTurnLogs().length > 0, true);
+});
+
+test("creates snapshot SQL for psql seeding", () => {
+  const rules = createGameRules();
+  const island = createInitialIsland("1", "Alpha", new DeterministicRandom(1), rules);
+  const sql = snapshotToSql(
+    gameStateToRows(
+      {
+        turn: 1,
+        lastTurnAt: 0,
+        islands: [island]
+      },
+      rules
+    )
+  );
+
+  assert.equal(sql.includes("insert into game_state"), true);
+  assert.equal(sql.includes("insert into islands"), true);
+  assert.equal(sql.includes("insert into island_cells"), true);
+  assert.equal(sql.includes("insert into command_queue"), true);
 });

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
+    "db:seed:sql": "pnpm run build && node packages/db/dist/seed-sql.js",
     "test": "pnpm run build && node --test packages/core/dist/**/*.test.js packages/db/dist/**/*.test.js"
   },
   "devDependencies": {}

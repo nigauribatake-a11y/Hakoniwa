@@ -11,3 +11,9 @@ declare module "node:assert/strict" {
 declare module "node:test" {
   export function test(name: string, fn: () => void | Promise<void>): void;
 }
+
+declare const process: {
+  stdout: {
+    write(text: string): void;
+  };
+};
