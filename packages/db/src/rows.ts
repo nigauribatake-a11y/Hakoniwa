@@ -1,3 +1,4 @@
+import { createGameRules, type GameRulesOverrides } from "../../core/dist/index.js";
 import type {
   Cell,
   CommandKind,
@@ -134,7 +135,7 @@ export function rowsToGameState(rows: GameStateRows): {
       lastTurnAt: rows.gameState.lastTurnAt,
       islands
     },
-    rules: JSON.parse(rows.gameState.rulesJson) as GameRules
+    rules: createGameRules(JSON.parse(rows.gameState.rulesJson) as GameRulesOverrides)
   };
 }
 

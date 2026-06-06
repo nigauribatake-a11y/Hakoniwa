@@ -266,8 +266,8 @@ async function renderCommandCost(): Promise<void> {
   const island = currentIsland();
   if (!island) return;
 
-  const fallbackCost = loaded?.rules.commandCosts[selectedCommand] ?? 0;
-  const fallbackDuration = loaded?.rules.commandDurations[selectedCommand] ?? 0;
+  const fallbackCost = loaded?.rules.commandCosts?.[selectedCommand] ?? 0;
+  const fallbackDuration = loaded?.rules.commandDurations?.[selectedCommand] ?? 0;
   commandCost.textContent = `費用 ${fallbackCost} / ${fallbackDuration}T`;
 
   try {
@@ -339,7 +339,7 @@ async function openCellDialog(cell: Cell): Promise<void> {
   const evaluations = await Promise.all(
     commandKinds
       .filter((kind) => kind !== "doNothing")
-      .map((kind) => evaluateCommand(kind, island.id, cell.x, cell.y))
+      .map((kind) => safeEvaluateCommand(kind, island, cell))
   );
 
   dialogCommandList.replaceChildren(
@@ -387,6 +387,24 @@ async function evaluateCommand(
   y: number
 ): Promise<CommandEvaluation> {
   return apiPost<CommandEvaluation>("/command/evaluate", { islandId, kind, x, y });
+}
+
+async function safeEvaluateCommand(
+  kind: CommandKind,
+  island: Island,
+  cell: Cell
+): Promise<CommandEvaluation> {
+  try {
+    return await evaluateCommand(kind, island.id, cell.x, cell.y);
+  } catch (error) {
+    return {
+      command: kind,
+      cost: loaded?.rules.commandCosts?.[kind] ?? 0,
+      duration: loaded?.rules.commandDurations?.[kind] ?? 0,
+      canExecute: false,
+      reason: errorMessage(error)
+    };
+  }
 }
 
 function workText(cell: Cell): string {

@@ -29,6 +29,30 @@ test("serializes and restores game state rows", () => {
   assert.deepEqual(restored.rules, rules);
 });
 
+test("restores old rules json with new default rule fields", () => {
+  const rules = createGameRules();
+  const island = createInitialIsland("1", "Alpha", new DeterministicRandom(1), rules);
+  const rows = gameStateToRows(
+    {
+      turn: 1,
+      lastTurnAt: 0,
+      islands: [island]
+    },
+    rules
+  );
+  const oldRules = JSON.parse(rows.gameState.rulesJson) as Record<string, unknown>;
+  delete oldRules.commandDurations;
+  delete oldRules.smallTurnSeconds;
+  delete oldRules.majorTurnEverySmallTurns;
+  rows.gameState.rulesJson = JSON.stringify(oldRules);
+
+  const restored = rowsToGameState(rows);
+
+  assert.equal(restored.rules.commandDurations.plant, 2);
+  assert.equal(restored.rules.smallTurnSeconds, 900);
+  assert.equal(restored.rules.majorTurnEverySmallTurns, 24);
+});
+
 test("repository saves turn result and appends logs", async () => {
   const rules = createGameRules({
     disasterGraceTurns: 100,
