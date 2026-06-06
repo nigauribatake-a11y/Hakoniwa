@@ -53,6 +53,7 @@ const terrainGlyphs: Record<string, string> = {
 
 const terrainImages: Record<string, string> = {
   sea: "/assets/terrain/sea.gif",
+  coast: "/assets/terrain/coast.gif",
   waste: "/assets/terrain/waste.gif",
   plains: "/assets/terrain/plains.gif",
   town: "/assets/terrain/town.gif",
@@ -60,6 +61,7 @@ const terrainImages: Record<string, string> = {
   farm: "/assets/terrain/farm.gif",
   factory: "/assets/terrain/factory.gif",
   mountain: "/assets/terrain/mountain.gif",
+  mine: "/assets/terrain/mine.gif",
   missileBase: "/assets/terrain/missile-base.gif",
   defence: "/assets/terrain/defence.gif",
   monument: "/assets/terrain/monument.gif"
@@ -248,7 +250,7 @@ function renderMap(island: Island): void {
       button.style.setProperty("--x", String(cell.x));
       button.style.setProperty("--y", String(cell.y));
       button.style.setProperty("--row-offset", cell.y % 2 === 0 ? "0" : "0.5");
-      button.style.setProperty("--terrain-image", `url("${terrainImages[cell.terrain] ?? ""}")`);
+      button.style.setProperty("--terrain-image", `url("${terrainImageForCell(cell)}")`);
       button.dataset.selected = String(cell.x === selectedCell.x && cell.y === selectedCell.y);
       button.dataset.working = String(Boolean(cell.workKind));
       button.title = `${terrainLabels[cell.terrain]} (${cell.x}, ${cell.y}) value=${cell.value}`;
@@ -426,6 +428,12 @@ function workText(cell: Cell): string {
   const remaining = cell.workRemaining ?? 0;
   const total = cell.workTotal ?? 0;
   return `${remaining}/${total}`;
+}
+
+function terrainImageForCell(cell: Cell): string {
+  if (cell.terrain === "sea" && cell.value === 1) return terrainImages.coast;
+  if (cell.terrain === "mountain" && cell.value > 0) return terrainImages.mine;
+  return terrainImages[cell.terrain] ?? "";
 }
 
 async function apiGet<T>(path: string): Promise<T> {

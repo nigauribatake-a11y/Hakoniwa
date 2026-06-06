@@ -178,7 +178,7 @@ button:disabled {
 }
 
 .map {
-  --cell-w: 40px;
+  --cell-w: 32px;
   --cell-h: 32px;
   position: relative;
   width: calc(var(--cell-w) * 12 + var(--cell-w) * 0.5);
@@ -413,8 +413,8 @@ button:disabled {
   }
 
   .map {
-    --cell-w: 28px;
-    --cell-h: 22px;
+    --cell-w: 24px;
+    --cell-h: 24px;
   }
 
   .cell {
