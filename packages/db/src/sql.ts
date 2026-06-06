@@ -27,7 +27,14 @@ export function snapshotToSql(rows: GameStateRows): string {
         x: row.x,
         y: row.y,
         terrain: row.terrain,
-        value: row.value
+        value: row.value,
+        work_kind: row.workKind,
+        work_remaining: row.workRemaining,
+        work_total: row.workTotal,
+        work_arg: row.workArg,
+        monster_kind: row.monsterKind,
+        monster_action_remaining: row.monsterActionRemaining,
+        monster_action_total: row.monsterActionTotal
       })
     ),
     ...rows.commandQueue.map((row) =>

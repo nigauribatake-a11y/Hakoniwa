@@ -10,11 +10,12 @@ import {
 } from "./model.js";
 import {
   applyIncome,
+  clearCellWork,
   cloneCells,
+  commandFailureReason,
   defaultGameRules,
   estimateIsland,
   getCell,
-  isCoast,
   markCoasts,
   shiftCommandQueue,
   updateCells
@@ -47,8 +48,12 @@ export function advanceTurn(
   const random =
     "nextInt" in options ? options : options.random ?? new DeterministicRandom(state.turn + 1);
   const logs: TurnLog[] = [];
+  const isMajorTurn = (state.turn + 1) % rules.majorTurnEverySmallTurns === 0;
   const islands = state.islands.map((island) => {
-    let current = applyIncome(estimateIsland(island), rules);
+    let current = estimateIsland(island);
+    const progress = progressCellWork(current);
+    current = progress.island;
+    logs.push(...progress.logs);
 
     while (true) {
       const result = executeNextCommand(current, rules);
@@ -58,9 +63,13 @@ export function advanceTurn(
       if (result.commandResult.consumeTurn) break;
     }
 
-    const cellUpdate = updateCells(current, random, rules, state.turn);
-    current = cellUpdate.island;
-    logs.push(...cellUpdate.logs);
+    if (isMajorTurn) {
+      current = applyIncome(estimateIsland(current), rules);
+      const cellUpdate = updateCells(current, random, rules, state.turn);
+      current = cellUpdate.island;
+      logs.push(...cellUpdate.logs);
+    }
+
     return estimateIsland(current);
   });
 
@@ -68,7 +77,7 @@ export function advanceTurn(
     state: {
       ...state,
       turn: state.turn + 1,
-      lastTurnAt: state.lastTurnAt + rules.turnSeconds,
+      lastTurnAt: state.lastTurnAt + rules.smallTurnSeconds,
       islands
     },
     logs
@@ -116,6 +125,7 @@ export function executeCommand(
   }
 
   const cost = rules.commandCosts[command.kind];
+  const duration = rules.commandDurations[command.kind];
   if (island.money < cost) {
     return {
       island,
@@ -142,23 +152,27 @@ export function executeCommand(
   }
 
   const changed = { ...island, absentTurns: 0, cells };
+  const reason = commandFailureReason(cell, command);
+  if (reason) {
+    return failure(island, command, reason);
+  }
+
+  if (duration > 1) {
+    cell.workKind = command.kind;
+    cell.workRemaining = duration - 1;
+    cell.workTotal = duration;
+    if (command.arg !== undefined) cell.workArg = command.arg;
+    return success(changed, cost, command, true, "started");
+  }
 
   switch (command.kind) {
     case "prepare": {
-      if (cell.terrain === "sea" || cell.terrain === "mountain") {
-        return failure(island, command, "cannot prepare this terrain");
-      }
-
       cell.terrain = "plains";
       cell.value = 0;
       return success(changed, cost, command, true);
     }
 
     case "reclaim": {
-      if (!isCoast(cell)) {
-        return failure(island, command, "can only reclaim coast sea");
-      }
-
       cell.terrain = "waste";
       cell.value = 0;
       markCoasts(cells);
@@ -166,10 +180,6 @@ export function executeCommand(
     }
 
     case "destroy": {
-      if (cell.terrain === "sea") {
-        return failure(island, command, "cannot destroy sea");
-      }
-
       if (cell.terrain === "mountain") {
         cell.value = 1;
       } else {
@@ -181,10 +191,6 @@ export function executeCommand(
     }
 
     case "sellTrees": {
-      if (cell.terrain !== "forest") {
-        return failure(island, command, "can only sell trees from forest");
-      }
-
       const income = cell.value * 5;
       cell.value = 0;
       cell.terrain = "plains";
@@ -199,59 +205,35 @@ export function executeCommand(
     }
 
     case "plant": {
-      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
-        return failure(island, command, "can only plant on plains or waste");
-      }
-
       cell.terrain = "forest";
       cell.value = 1;
       return success(changed, cost, command, true);
     }
 
     case "buildFarm": {
-      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
-        return failure(island, command, "can only build farm on plains or waste");
-      }
-
       cell.terrain = "farm";
       cell.value = 10;
       return success(changed, cost, command, true);
     }
 
     case "buildFactory": {
-      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
-        return failure(island, command, "can only build factory on plains or waste");
-      }
-
       cell.terrain = "factory";
       cell.value = 10;
       return success(changed, cost, command, true);
     }
 
     case "developMine": {
-      if (cell.terrain !== "mountain") {
-        return failure(island, command, "can only develop mines on mountain");
-      }
-
       cell.value += 5;
       return success(changed, cost, command, true);
     }
 
     case "buildMissileBase": {
-      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
-        return failure(island, command, "can only build missile base on plains or waste");
-      }
-
       cell.terrain = "missileBase";
       cell.value = 0;
       return success(changed, cost, command, true);
     }
 
     case "buildMonument": {
-      if (cell.terrain !== "plains" && cell.terrain !== "waste") {
-        return failure(island, command, "can only build monument on plains or waste");
-      }
-
       cell.terrain = "monument";
       cell.value = command.arg ?? 0;
       return success(changed, cost, command, true);
@@ -263,7 +245,8 @@ function success(
   island: Island,
   cost: number,
   command: CommandPlan,
-  consumeTurn: boolean
+  consumeTurn: boolean,
+  mode: "executed" | "started" = "executed"
 ): {
   island: Island;
   commandResult: CommandResult;
@@ -278,7 +261,7 @@ function success(
     commandResult: {
       success: true,
       consumeTurn,
-      logs: [log(island, `${island.name} executed ${command.kind}.`)]
+      logs: [log(island, `${island.name} ${mode} ${command.kind}.`)]
     }
   };
 }
@@ -306,4 +289,97 @@ function log(island: Island, message: string): TurnLog {
     islandId: island.id,
     message
   };
+}
+
+export function progressCellWork(island: Island): {
+  island: Island;
+  logs: TurnLog[];
+} {
+  const cells = cloneCells(island.cells);
+  const logs: TurnLog[] = [];
+
+  for (const row of cells) {
+    for (const cell of row) {
+      if (!cell.workKind || !cell.workRemaining || !cell.workTotal) continue;
+
+      cell.workRemaining -= 1;
+
+      if (cell.workRemaining <= 0) {
+        const completed = cell.workKind;
+        completeCellWork(cell);
+        clearCellWork(cell);
+        logs.push(log(island, `${island.name} completed ${completed} at (${cell.x}, ${cell.y}).`));
+      }
+    }
+  }
+
+  for (const row of cells) {
+    for (const cell of row) {
+      if (!cell.monsterKind || cell.monsterActionRemaining === undefined) continue;
+      const previousRemaining = cell.monsterActionRemaining;
+      cell.monsterActionRemaining = Math.max(0, cell.monsterActionRemaining - 1);
+      if (previousRemaining > 0 && cell.monsterActionRemaining === 0) {
+        logs.push(log(island, `${cell.monsterKind} is ready to act at (${cell.x}, ${cell.y}).`));
+      }
+    }
+  }
+
+  markCoasts(cells);
+  return {
+    island: estimateIsland({ ...island, cells }),
+    logs
+  };
+}
+
+function completeCellWork(cell: {
+  terrain: string;
+  value: number;
+  workKind?: CommandPlan["kind"];
+  workArg?: number;
+}): void {
+  switch (cell.workKind) {
+    case "prepare":
+      cell.terrain = "plains";
+      cell.value = 0;
+      break;
+    case "reclaim":
+      cell.terrain = "waste";
+      cell.value = 0;
+      break;
+    case "destroy":
+      if (cell.terrain === "mountain") {
+        cell.value = 1;
+      } else {
+        cell.terrain = "waste";
+        cell.value = 0;
+      }
+      break;
+    case "sellTrees":
+      cell.terrain = "plains";
+      cell.value = 0;
+      break;
+    case "plant":
+      cell.terrain = "forest";
+      cell.value = 1;
+      break;
+    case "buildFarm":
+      cell.terrain = "farm";
+      cell.value = 10;
+      break;
+    case "buildFactory":
+      cell.terrain = "factory";
+      cell.value = 10;
+      break;
+    case "developMine":
+      cell.value += 5;
+      break;
+    case "buildMissileBase":
+      cell.terrain = "missileBase";
+      cell.value = 0;
+      break;
+    case "buildMonument":
+      cell.terrain = "monument";
+      cell.value = cell.workArg ?? 0;
+      break;
+  }
 }

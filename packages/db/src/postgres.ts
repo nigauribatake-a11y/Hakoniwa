@@ -15,7 +15,8 @@ import {
   type CommandQueueRow,
   type GameStateRow,
   type GameStateRows,
-  type IslandRow
+  type IslandRow,
+  type TurnLogRow
 } from "./rows.js";
 import type { GameRepository, LoadedGameState } from "./repository.js";
 
@@ -125,6 +126,23 @@ export class PostgresGameRepository implements GameRepository {
     }
   }
 
+  async loadTurnLogs(limit = 50): Promise<TurnLogRow[]> {
+    const result = await this.pool.query(
+      [
+        "select id, turn, island_id, message",
+        "from turn_logs order by id desc limit $1"
+      ].join(" "),
+      [limit]
+    );
+
+    return result.rows.map((row: Record<string, unknown>) => ({
+      id: Number(row.id),
+      turn: Number(row.turn),
+      islandId: String(row.island_id),
+      message: String(row.message)
+    }));
+  }
+
   private async loadGameStateRow(): Promise<GameStateRow | undefined> {
     const result = await this.pool.query(
       "select id, turn, last_turn_at, rules_json from game_state where id = 'default'"
@@ -168,7 +186,11 @@ export class PostgresGameRepository implements GameRepository {
 
   private async loadCellRows(): Promise<CellRow[]> {
     const result = await this.pool.query(
-      "select island_id, x, y, terrain, value from island_cells order by island_id, y, x"
+      [
+        "select island_id, x, y, terrain, value, work_kind, work_remaining, work_total,",
+        "work_arg, monster_kind, monster_action_remaining, monster_action_total",
+        "from island_cells order by island_id, y, x"
+      ].join(" ")
     );
 
     return result.rows.map((row: Record<string, unknown>) => ({
@@ -176,7 +198,15 @@ export class PostgresGameRepository implements GameRepository {
       x: Number(row.x),
       y: Number(row.y),
       terrain: row.terrain as TerrainKind,
-      value: Number(row.value)
+      value: Number(row.value),
+      workKind: row.work_kind === null ? null : (row.work_kind as CommandKind),
+      workRemaining: row.work_remaining === null ? null : Number(row.work_remaining),
+      workTotal: row.work_total === null ? null : Number(row.work_total),
+      workArg: row.work_arg === null ? null : Number(row.work_arg),
+      monsterKind: row.monster_kind === null ? null : String(row.monster_kind),
+      monsterActionRemaining:
+        row.monster_action_remaining === null ? null : Number(row.monster_action_remaining),
+      monsterActionTotal: row.monster_action_total === null ? null : Number(row.monster_action_total)
     }));
   }
 
@@ -248,8 +278,26 @@ async function insertIsland(client: PgPoolClient, row: IslandRow): Promise<void>
 
 async function insertCell(client: PgPoolClient, row: CellRow): Promise<void> {
   await client.query(
-    "insert into island_cells (island_id, x, y, terrain, value) values ($1, $2, $3, $4, $5)",
-    [row.islandId, row.x, row.y, row.terrain, row.value]
+    [
+      "insert into island_cells",
+      "(island_id, x, y, terrain, value, work_kind, work_remaining, work_total,",
+      "work_arg, monster_kind, monster_action_remaining, monster_action_total)",
+      "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
+    ].join(" "),
+    [
+      row.islandId,
+      row.x,
+      row.y,
+      row.terrain,
+      row.value,
+      row.workKind,
+      row.workRemaining,
+      row.workTotal,
+      row.workArg,
+      row.monsterKind,
+      row.monsterActionRemaining,
+      row.monsterActionTotal
+    ]
   );
 }
 

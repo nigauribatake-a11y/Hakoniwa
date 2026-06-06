@@ -29,6 +29,7 @@ class FakeRepository implements ApiRepository {
     position: number;
     command: CommandPlan;
   };
+  logs = [{ id: 1, turn: 1, islandId: "1", message: "Alpha started plant." }];
 
   async loadGameState(): Promise<{ state: GameState; rules: GameRules }> {
     return { state: this.state, rules: this.rules };
@@ -40,6 +41,10 @@ class FakeRepository implements ApiRepository {
 
   async setCommand(islandId: string, position: number, command: CommandPlan): Promise<void> {
     this.command = { islandId, position, command };
+  }
+
+  async loadTurnLogs(): Promise<Array<{ id: number; turn: number; islandId: string; message: string }>> {
+    return this.logs;
   }
 }
 
@@ -96,4 +101,30 @@ test("POST /command rejects unknown command", async () => {
   );
 
   assert.equal(response.status, 400);
+});
+
+test("GET /logs returns stored turn logs", async () => {
+  const repository = new FakeRepository();
+  const response = await handleApiRequest(
+    { method: "GET", path: "/logs" },
+    repository
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((response.body as { logs: unknown[] }).logs.length, 1);
+});
+
+test("POST /command/evaluate returns cost and condition result", async () => {
+  const repository = new FakeRepository();
+  const response = await handleApiRequest(
+    {
+      method: "POST",
+      path: "/command/evaluate",
+      body: { islandId: "1", kind: "plant", x: 5, y: 6 }
+    },
+    repository
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((response.body as { canExecute: boolean }).canExecute, true);
 });

@@ -1,4 +1,13 @@
-import type { Cell, CommandKind, CommandPlan, Island, StateResponse, TurnResult } from "./types.js";
+import type {
+  Cell,
+  CommandEvaluation,
+  CommandKind,
+  CommandPlan,
+  Island,
+  LogsResponse,
+  StateResponse,
+  TurnResult
+} from "./types.js";
 
 const commandLabels: Record<CommandKind, string> = {
   doNothing: "何もしない",
@@ -64,6 +73,9 @@ const logs = byId("logs");
 const refreshButton = byId<HTMLButtonElement>("refreshButton");
 const queueButton = byId<HTMLButtonElement>("queueButton");
 const turnButton = byId<HTMLButtonElement>("turnButton");
+const cellDialog = byId<HTMLDialogElement>("cellDialog");
+const dialogTitle = byId("dialogTitle");
+const dialogCommandList = byId("dialogCommandList");
 
 apiBaseInput.value = defaultApiBase;
 queuePosition.value = "0";
@@ -85,7 +97,7 @@ islandSelect.addEventListener("change", () => {
 });
 commandSelect.addEventListener("change", () => {
   selectedCommand = commandSelect.value as CommandKind;
-  renderCommandCost();
+  void renderCommandCost();
 });
 refreshButton.addEventListener("click", () => {
   void loadState();
@@ -107,6 +119,7 @@ async function loadState(): Promise<void> {
     connectionStatus.textContent = `接続中 / ターン ${loaded.state.turn}`;
     connectionStatus.className = "status status-ok";
     render();
+    await loadLogs();
   } catch (error) {
     connectionStatus.textContent = errorMessage(error);
     connectionStatus.className = "status status-error";
@@ -149,11 +162,12 @@ async function advanceTurn(): Promise<void> {
       rules: loaded?.rules ?? {
         turnSeconds: 21_600,
         commandQueueLength: 40,
-        commandCosts: {} as Record<CommandKind, number>
+        commandCosts: {} as Record<CommandKind, number>,
+        commandDurations: {} as Record<CommandKind, number>
       }
     };
     render();
-    renderLogs(result.logs.map((log) => log.message));
+    renderLogs(result.logs.map((log) => ({ turn: result.state.turn, message: log.message })));
     connectionStatus.textContent = `接続中 / ターン ${result.state.turn}`;
     connectionStatus.className = "status status-ok";
   } catch (error) {
@@ -184,7 +198,7 @@ function render(): void {
   renderMap(island);
   renderQueue(island);
   renderSelectedCell(island);
-  renderCommandCost();
+  void renderCommandCost();
 }
 
 function renderStats(island: Island): void {
@@ -217,15 +231,18 @@ function renderMap(island: Island): void {
       const button = document.createElement("button");
       button.className = `cell terrain-${cell.terrain}`;
       button.type = "button";
-      button.style.gridColumn = `${cell.x + 1}`;
-      button.style.gridRow = `${cell.y + 1}`;
+      button.style.setProperty("--x", String(cell.x));
+      button.style.setProperty("--y", String(cell.y));
+      button.style.setProperty("--row-offset", cell.y % 2 === 0 ? "0" : "0.5");
       button.dataset.selected = String(cell.x === selectedCell.x && cell.y === selectedCell.y);
+      button.dataset.working = String(Boolean(cell.workKind));
       button.title = `${terrainLabels[cell.terrain]} (${cell.x}, ${cell.y}) value=${cell.value}`;
-      button.textContent = terrainGlyphs[cell.terrain] ?? "";
+      button.textContent = cell.workKind ? workText(cell) : terrainGlyphs[cell.terrain] ?? "";
       button.addEventListener("click", () => {
         selectedCell = { x: cell.x, y: cell.y };
         renderMap(island);
         renderSelectedCell(island);
+        void openCellDialog(cell);
       });
       map.append(button);
     }
@@ -239,12 +256,28 @@ function renderSelectedCell(island: Island): void {
     return;
   }
 
-  cellDetails.textContent = `${terrainLabels[cell.terrain]} / x:${cell.x} y:${cell.y} / value:${cell.value}`;
+  const work = cell.workKind
+    ? ` / ${commandLabels[cell.workKind]} 残り${cell.workRemaining ?? 0}/${cell.workTotal ?? 0}`
+    : "";
+  cellDetails.textContent = `${terrainLabels[cell.terrain]} / x:${cell.x} y:${cell.y} / value:${cell.value}${work}`;
 }
 
-function renderCommandCost(): void {
-  const cost = loaded?.rules.commandCosts[selectedCommand] ?? 0;
-  commandCost.textContent = `費用 ${cost}`;
+async function renderCommandCost(): Promise<void> {
+  const island = currentIsland();
+  if (!island) return;
+
+  const fallbackCost = loaded?.rules.commandCosts[selectedCommand] ?? 0;
+  const fallbackDuration = loaded?.rules.commandDurations[selectedCommand] ?? 0;
+  commandCost.textContent = `費用 ${fallbackCost} / ${fallbackDuration}T`;
+
+  try {
+    const evaluation = await evaluateCommand(selectedCommand, island.id, selectedCell.x, selectedCell.y);
+    commandCost.textContent = evaluation.canExecute
+      ? `費用 ${evaluation.cost} / ${evaluation.duration}T`
+      : `不可: ${evaluation.reason ?? "条件未達"}`;
+  } catch {
+    commandCost.textContent = `費用 ${fallbackCost} / ${fallbackDuration}T`;
+  }
 }
 
 function renderQueue(island: Island): void {
@@ -266,14 +299,23 @@ function renderQueue(island: Island): void {
   );
 }
 
-function renderLogs(messages: string[]): void {
+function renderLogs(messages: Array<{ turn: number; message: string }>): void {
   logs.replaceChildren(
-    ...messages.map((message) => {
+    ...messages.map((entry) => {
       const item = document.createElement("li");
-      item.textContent = message;
+      item.textContent = `T${entry.turn}: ${entry.message}`;
       return item;
     })
   );
+}
+
+async function loadLogs(): Promise<void> {
+  try {
+    const response = await apiGet<LogsResponse>("/logs");
+    renderLogs(response.logs.map((log) => ({ turn: log.turn, message: log.message })));
+  } catch {
+    // Logs are supplementary; state rendering should not fail if this endpoint is absent.
+  }
 }
 
 function showLocalLog(message: string, isError = false): void {
@@ -285,6 +327,72 @@ function showLocalLog(message: string, isError = false): void {
 
 function currentIsland(): Island | undefined {
   return loaded?.state.islands.find((island) => island.id === selectedIslandId) ?? loaded?.state.islands[0];
+}
+
+async function openCellDialog(cell: Cell): Promise<void> {
+  const island = currentIsland();
+  if (!island) return;
+
+  dialogTitle.textContent = `${terrainLabels[cell.terrain]} (${cell.x}, ${cell.y})`;
+  dialogCommandList.replaceChildren();
+
+  const evaluations = await Promise.all(
+    commandKinds
+      .filter((kind) => kind !== "doNothing")
+      .map((kind) => evaluateCommand(kind, island.id, cell.x, cell.y))
+  );
+
+  dialogCommandList.replaceChildren(
+    ...evaluations.map((evaluation) => commandChoiceButton(evaluation, island, cell))
+  );
+
+  cellDialog.showModal();
+}
+
+function commandChoiceButton(evaluation: CommandEvaluation, island: Island, cell: Cell): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "dialog-command";
+  button.disabled = !evaluation.canExecute;
+  const detail = evaluation.canExecute
+    ? `費用 ${evaluation.cost} / ${evaluation.duration}T`
+    : evaluation.reason ?? "実行できません";
+  button.innerHTML = `<strong>${commandLabels[evaluation.command]}</strong><span>${detail}</span>`;
+  button.addEventListener("click", () => {
+    selectedCommand = evaluation.command;
+    selectedCell = { x: cell.x, y: cell.y };
+    commandSelect.value = selectedCommand;
+    void submitCommandFor(island.id, evaluation.command, cell.x, cell.y);
+    cellDialog.close();
+  });
+  return button;
+}
+
+async function submitCommandFor(
+  islandId: string,
+  kind: CommandKind,
+  x: number,
+  y: number
+): Promise<void> {
+  const position = Number(queuePosition.value);
+  await apiPost("/command", { islandId, position, kind, x, y });
+  await loadState();
+  showLocalLog(`${position + 1}番に ${commandLabels[kind]} (${x}, ${y}) を登録しました。`);
+}
+
+async function evaluateCommand(
+  kind: CommandKind,
+  islandId: string,
+  x: number,
+  y: number
+): Promise<CommandEvaluation> {
+  return apiPost<CommandEvaluation>("/command/evaluate", { islandId, kind, x, y });
+}
+
+function workText(cell: Cell): string {
+  const remaining = cell.workRemaining ?? 0;
+  const total = cell.workTotal ?? 0;
+  return `${remaining}/${total}`;
 }
 
 async function apiGet<T>(path: string): Promise<T> {

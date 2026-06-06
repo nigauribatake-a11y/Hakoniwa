@@ -178,21 +178,27 @@ button:disabled {
 }
 
 .map {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(34px, 1fr));
-  grid-template-rows: repeat(12, 42px);
-  gap: 4px;
-  max-width: 760px;
+  --hex-w: 54px;
+  --hex-h: 46px;
+  position: relative;
+  width: calc(var(--hex-w) * 12 + var(--hex-w) * 0.5);
+  height: calc(var(--hex-h) * 9.4);
+  max-width: 100%;
   margin: 0 auto;
 }
 
 .cell {
+  position: absolute;
+  left: calc(var(--x) * var(--hex-w) + var(--row-offset) * var(--hex-w));
+  top: calc(var(--y) * var(--hex-h) * 0.76);
+  width: var(--hex-w);
   min-width: 0;
   min-height: 0;
-  height: 42px;
+  height: var(--hex-h);
   padding: 0;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid rgba(0, 0, 0, 0.16);
+  clip-path: polygon(25% 2%, 75% 2%, 100% 50%, 75% 98%, 25% 98%, 0 50%);
   color: rgba(0, 0, 0, 0.72);
   font-weight: 700;
   line-height: 1;
@@ -201,6 +207,17 @@ button:disabled {
 .cell[data-selected="true"] {
   outline: 3px solid #24251f;
   outline-offset: 1px;
+}
+
+.cell[data-working="true"]::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(36, 37, 31, 0.65);
 }
 
 .terrain-sea {
@@ -325,6 +342,44 @@ button:disabled {
   font-size: 13px;
 }
 
+.cell-dialog {
+  width: min(420px, calc(100vw - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.cell-dialog::backdrop {
+  background: rgba(36, 37, 31, 0.28);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dialog-command-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dialog-command {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  text-align: left;
+  align-items: center;
+}
+
+.dialog-command span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .error-line {
   color: var(--danger);
 }
@@ -355,14 +410,11 @@ button:disabled {
   }
 
   .map {
-    grid-template-columns: repeat(12, minmax(22px, 1fr));
-    grid-template-rows: repeat(12, 30px);
-    gap: 2px;
+    --hex-w: 34px;
+    --hex-h: 30px;
   }
 
   .cell {
-    height: 30px;
-    border-radius: 4px;
     font-size: 11px;
   }
 }

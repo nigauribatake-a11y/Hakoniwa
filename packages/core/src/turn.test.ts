@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { advanceTurn, DeterministicRandom } from "./turn.js";
-import { createBasicIsland, createGameRules, createInitialIsland } from "./rules.js";
+import { createBasicIsland, createGameRules, createInitialIsland, evaluateMonsterAction } from "./rules.js";
 import type { GameState, RandomSource } from "./model.js";
 
 class SequenceRandom implements RandomSource {
@@ -16,12 +16,25 @@ class SequenceRandom implements RandomSource {
 }
 
 const noDisasterRules = createGameRules({
+  majorTurnEverySmallTurns: 1,
   earthquakeChancePer1000: 0,
   fireChancePer1000: 0,
   tsunamiChancePer1000: 0,
   typhoonChancePer1000: 0,
   meteorChancePer1000: 0,
-  eruptionChancePer1000: 0
+  eruptionChancePer1000: 0,
+  commandDurations: {
+    prepare: 1,
+    reclaim: 1,
+    destroy: 1,
+    sellTrees: 1,
+    plant: 1,
+    buildFarm: 1,
+    buildFactory: 1,
+    developMine: 1,
+    buildMissileBase: 1,
+    buildMonument: 1
+  }
 });
 
 test("advanceTurn executes the first valid command and shifts the queue", () => {
@@ -171,6 +184,7 @@ test("earthquake damages one non-sea cell when disaster roll triggers", () => {
   const result = advanceTurn(state, {
     random: new SequenceRandom([99, 0, 0, 999, 999, 999, 999, 999]),
     rules: createGameRules({
+      majorTurnEverySmallTurns: 1,
       disasterGraceTurns: 0
     })
   });
@@ -193,6 +207,7 @@ test("disasters do not occur during the grace turns", () => {
     {
       random: new SequenceRandom([99, 0, 0, 0, 0, 0, 0, 0]),
       rules: createGameRules({
+        majorTurnEverySmallTurns: 1,
         disasterGraceTurns: 10,
         earthquakeChancePer1000: 1000,
         fireChancePer1000: 1000,
@@ -239,7 +254,7 @@ test("rules can override turn time and command costs", () => {
   const result = advanceTurn(state, {
     rules: createGameRules({
       ...noDisasterRules,
-      turnSeconds: 60,
+      smallTurnSeconds: 60,
       commandCosts: {
         plant: 7
       }
@@ -250,6 +265,62 @@ test("rules can override turn time and command costs", () => {
 
   assert.equal(result.state.lastTurnAt, 70);
   assert.equal(updated.money, 993);
+});
+
+test("commands can take multiple small turns before completion", () => {
+  const rules = createGameRules({
+    ...noDisasterRules,
+    majorTurnEverySmallTurns: 99,
+    commandDurations: {
+      plant: 2
+    }
+  });
+  const island = createBasicIsland("1", "Alpha");
+  island.commandQueue[0] = { kind: "plant", x: 5, y: 6 };
+
+  const first = advanceTurn(
+    {
+      turn: 1,
+      lastTurnAt: 0,
+      islands: [island]
+    },
+    { rules }
+  );
+  const firstIsland = first.state.islands[0]!;
+
+  assert.equal(firstIsland.cells[6]![5]!.terrain, "plains");
+  assert.equal(firstIsland.cells[6]![5]!.workKind, "plant");
+  assert.equal(firstIsland.cells[6]![5]!.workRemaining, 1);
+
+  const second = advanceTurn(first.state, { rules });
+  const secondIsland = second.state.islands[0]!;
+
+  assert.equal(secondIsland.cells[6]![5]!.terrain, "forest");
+  assert.equal(secondIsland.cells[6]![5]!.workKind, undefined);
+});
+
+test("monster action state is stored on cells and counts down", () => {
+  const island = createBasicIsland("1", "Alpha");
+  const cell = island.cells[6]![6]!;
+  cell.monsterKind = "testMonster";
+  cell.monsterActionRemaining = 1;
+  cell.monsterActionTotal = 3;
+
+  assert.equal(evaluateMonsterAction(cell).canAct, false);
+
+  const result = advanceTurn(
+    {
+      turn: 1,
+      lastTurnAt: 0,
+      islands: [island]
+    },
+    { rules: noDisasterRules }
+  );
+  const updatedCell = result.state.islands[0]!.cells[6]![6]!;
+
+  assert.equal(updatedCell.monsterActionRemaining, 0);
+  assert.equal(evaluateMonsterAction(updatedCell).canAct, true);
+  assert.equal(result.logs.some((entry) => /ready to act/.test(entry.message)), true);
 });
 
 test("rules can disable all disasters", () => {

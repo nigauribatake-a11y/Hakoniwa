@@ -28,3 +28,9 @@ http://127.0.0.1:3000
 ```
 
 The UI can currently read the island, select a map cell, register a command into a queue slot, and advance one turn.
+
+If the database was created before cell work state was added, run:
+
+```bash
+docker compose exec -T postgres psql -U hakoniwa -d hakoniwa < docs/cell-state-migration.sql
+```

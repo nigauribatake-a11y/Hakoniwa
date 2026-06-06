@@ -26,6 +26,13 @@ create table island_cells (
   y integer not null,
   terrain text not null,
   value integer not null,
+  work_kind text,
+  work_remaining integer,
+  work_total integer,
+  work_arg integer,
+  monster_kind text,
+  monster_action_remaining integer,
+  monster_action_total integer,
   primary key (island_id, x, y)
 );
 

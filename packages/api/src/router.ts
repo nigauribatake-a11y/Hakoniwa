@@ -1,4 +1,11 @@
-import { advanceTurn, type CommandPlan, type GameRules, type GameState, type TurnResult } from "../../core/dist/index.js";
+import {
+  advanceTurn,
+  evaluateCommand,
+  type CommandPlan,
+  type GameRules,
+  type GameState,
+  type TurnResult
+} from "../../core/dist/index.js";
 import { isCommandKind } from "../../db/dist/commands.js";
 
 export interface ApiRepository {
@@ -8,6 +15,7 @@ export interface ApiRepository {
   }>;
   saveTurnResult(result: TurnResult, rules: GameRules): Promise<void>;
   setCommand(islandId: string, position: number, command: CommandPlan): Promise<void>;
+  loadTurnLogs?(limit?: number): Promise<Array<{ id: number; turn: number; islandId: string; message: string }>>;
 }
 
 export interface ApiRequest {
@@ -33,6 +41,20 @@ export async function handleApiRequest(
     if (request.method === "GET" && request.path === "/state") {
       const loaded = await repository.loadGameState();
       return json(200, loaded);
+    }
+
+    if (request.method === "GET" && request.path === "/logs") {
+      if (!repository.loadTurnLogs) return json(200, { logs: [] });
+      const logs = await repository.loadTurnLogs(50);
+      return json(200, { logs });
+    }
+
+    if (request.method === "POST" && request.path === "/command/evaluate") {
+      const input = parseCommandInput({ ...(isRecord(request.body) ? request.body : {}), position: 0 });
+      const loaded = await repository.loadGameState();
+      const island = loaded.state.islands.find((candidate) => candidate.id === input.islandId);
+      if (!island) throw new Error(`island not found: ${input.islandId}`);
+      return json(200, evaluateCommand(island, input.command, loaded.rules));
     }
 
     if (request.method === "POST" && request.path === "/command") {

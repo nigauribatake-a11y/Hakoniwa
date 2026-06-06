@@ -4,8 +4,10 @@ import {
   type Cell,
   type CommandKind,
   type CommandPlan,
+  type CommandEvaluation,
   type GameRules,
   type Island,
+  type MonsterActionEvaluation,
   type RandomSource,
   type TerrainKind,
   type TurnLog
@@ -15,6 +17,8 @@ export const TURN_SECONDS = 21_600;
 
 export const defaultGameRules: GameRules = {
   turnSeconds: TURN_SECONDS,
+  smallTurnSeconds: 900,
+  majorTurnEverySmallTurns: 24,
   commandQueueLength: COMMAND_QUEUE_LENGTH,
   initialMoney: 1_000,
   initialFood: 1_000,
@@ -50,11 +54,25 @@ export const defaultGameRules: GameRules = {
     developMine: 300,
     buildMissileBase: 300,
     buildMonument: 9_999
+  },
+  commandDurations: {
+    doNothing: 0,
+    prepare: 1,
+    reclaim: 4,
+    destroy: 2,
+    sellTrees: 1,
+    plant: 2,
+    buildFarm: 3,
+    buildFactory: 4,
+    developMine: 5,
+    buildMissileBase: 6,
+    buildMonument: 8
   }
 };
 
-export type GameRulesOverrides = Omit<Partial<GameRules>, "commandCosts"> & {
+export type GameRulesOverrides = Omit<Partial<GameRules>, "commandCosts" | "commandDurations"> & {
   commandCosts?: Partial<GameRules["commandCosts"]>;
+  commandDurations?: Partial<GameRules["commandDurations"]>;
 };
 
 export function createGameRules(overrides: GameRulesOverrides = {}): GameRules {
@@ -64,6 +82,10 @@ export function createGameRules(overrides: GameRulesOverrides = {}): GameRules {
     commandCosts: {
       ...defaultGameRules.commandCosts,
       ...overrides.commandCosts
+    },
+    commandDurations: {
+      ...defaultGameRules.commandDurations,
+      ...overrides.commandDurations
     }
   };
 }
@@ -475,6 +497,108 @@ export function getCell(cells: Cell[][], x: number, y: number): Cell | undefined
 
 export function cloneCells(cells: Cell[][]): Cell[][] {
   return cells.map((row) => row.map((cell) => ({ ...cell })));
+}
+
+export function clearCellWork(cell: Cell): void {
+  delete cell.workKind;
+  delete cell.workRemaining;
+  delete cell.workTotal;
+  delete cell.workArg;
+}
+
+export function evaluateCommand(
+  island: Island,
+  command: CommandPlan,
+  rules: GameRules = defaultGameRules
+): CommandEvaluation {
+  const cost = rules.commandCosts[command.kind];
+  const duration = rules.commandDurations[command.kind];
+  const cell = getCell(island.cells, command.x, command.y);
+
+  if (command.kind === "doNothing") {
+    return { command: command.kind, cost, duration, canExecute: true };
+  }
+
+  if (island.money < cost) {
+    return { command: command.kind, cost, duration, canExecute: false, reason: "資金が不足しています" };
+  }
+
+  if (!cell) {
+    return { command: command.kind, cost, duration, canExecute: false, reason: "範囲外の座標です" };
+  }
+
+  if (cell.workKind) {
+    return { command: command.kind, cost, duration, canExecute: false, reason: "このセルは作業中です" };
+  }
+
+  const reason = commandFailureReason(cell, command);
+  return {
+    command: command.kind,
+    cost,
+    duration,
+    canExecute: reason === undefined,
+    ...(reason === undefined ? {} : { reason })
+  };
+}
+
+export function commandFailureReason(cell: Cell, command: CommandPlan): string | undefined {
+  switch (command.kind) {
+    case "doNothing":
+      return undefined;
+    case "prepare":
+      return cell.terrain === "sea" || cell.terrain === "mountain"
+        ? "この地形は整地できません"
+        : undefined;
+    case "reclaim":
+      return !isCoast(cell) ? "埋め立ては浅瀬のみ可能です" : undefined;
+    case "destroy":
+      return cell.terrain === "sea" ? "海は掘削できません" : undefined;
+    case "sellTrees":
+      return cell.terrain !== "forest" ? "伐採は森のみ可能です" : undefined;
+    case "plant":
+      return cell.terrain !== "plains" && cell.terrain !== "waste"
+        ? "植林は平地または荒地のみ可能です"
+        : undefined;
+    case "buildFarm":
+      return cell.terrain !== "plains" && cell.terrain !== "waste"
+        ? "農場は平地または荒地のみ建設できます"
+        : undefined;
+    case "buildFactory":
+      return cell.terrain !== "plains" && cell.terrain !== "waste"
+        ? "工場は平地または荒地のみ建設できます"
+        : undefined;
+    case "developMine":
+      return cell.terrain !== "mountain" ? "採掘場整備は山のみ可能です" : undefined;
+    case "buildMissileBase":
+      return cell.terrain !== "plains" && cell.terrain !== "waste"
+        ? "ミサイル基地は平地または荒地のみ建設できます"
+        : undefined;
+    case "buildMonument":
+      return cell.terrain !== "plains" && cell.terrain !== "waste"
+        ? "記念碑は平地または荒地のみ建設できます"
+        : undefined;
+  }
+}
+
+export function evaluateMonsterAction(cell: Cell): MonsterActionEvaluation {
+  if (!cell.monsterKind) {
+    return {
+      canAct: false,
+      remainingTurns: 0,
+      totalTurns: 0,
+      reason: "怪獣がいません"
+    };
+  }
+
+  const remainingTurns = cell.monsterActionRemaining ?? 0;
+  const totalTurns = cell.monsterActionTotal ?? 0;
+
+  return {
+    canAct: remainingTurns <= 0,
+    remainingTurns,
+    totalTurns,
+    ...(remainingTurns <= 0 ? {} : { reason: "行動準備中です" })
+  };
 }
 
 export function shiftCommandQueue(queue: CommandPlan[]): {

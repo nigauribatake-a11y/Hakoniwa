@@ -38,6 +38,13 @@ export interface CellRow {
   y: number;
   terrain: TerrainKind;
   value: number;
+  workKind: CommandKind | null;
+  workRemaining: number | null;
+  workTotal: number | null;
+  workArg: number | null;
+  monsterKind: string | null;
+  monsterActionRemaining: number | null;
+  monsterActionTotal: number | null;
 }
 
 export interface CommandQueueRow {
@@ -100,7 +107,16 @@ export function rowsToGameState(rows: GameStateRows): {
           x: row.x,
           y: row.y,
           terrain: row.terrain,
-          value: row.value
+          value: row.value,
+          ...(row.workKind === null ? {} : { workKind: row.workKind }),
+          ...(row.workRemaining === null ? {} : { workRemaining: row.workRemaining }),
+          ...(row.workTotal === null ? {} : { workTotal: row.workTotal }),
+          ...(row.workArg === null ? {} : { workArg: row.workArg }),
+          ...(row.monsterKind === null ? {} : { monsterKind: row.monsterKind }),
+          ...(row.monsterActionRemaining === null
+            ? {}
+            : { monsterActionRemaining: row.monsterActionRemaining }),
+          ...(row.monsterActionTotal === null ? {} : { monsterActionTotal: row.monsterActionTotal })
         };
       })
     );
@@ -154,7 +170,14 @@ function cellToRow(island: Island, cell: Cell): CellRow {
     x: cell.x,
     y: cell.y,
     terrain: cell.terrain,
-    value: cell.value
+    value: cell.value,
+    workKind: cell.workKind ?? null,
+    workRemaining: cell.workRemaining ?? null,
+    workTotal: cell.workTotal ?? null,
+    workArg: cell.workArg ?? null,
+    monsterKind: cell.monsterKind ?? null,
+    monsterActionRemaining: cell.monsterActionRemaining ?? null,
+    monsterActionTotal: cell.monsterActionTotal ?? null
   };
 }
 

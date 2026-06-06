@@ -29,6 +29,13 @@ export interface Cell {
   y: number;
   terrain: TerrainKind;
   value: number;
+  workKind?: CommandKind;
+  workRemaining?: number;
+  workTotal?: number;
+  workArg?: number;
+  monsterKind?: string;
+  monsterActionRemaining?: number;
+  monsterActionTotal?: number;
 }
 
 export interface CommandPlan {
@@ -66,6 +73,7 @@ export interface GameRules {
   turnSeconds: number;
   commandQueueLength: number;
   commandCosts: Record<CommandKind, number>;
+  commandDurations: Record<CommandKind, number>;
 }
 
 export interface StateResponse {
@@ -76,6 +84,23 @@ export interface StateResponse {
 export interface TurnResult {
   state: GameState;
   logs: Array<{
+    islandId: string;
+    message: string;
+  }>;
+}
+
+export interface CommandEvaluation {
+  command: CommandKind;
+  cost: number;
+  duration: number;
+  canExecute: boolean;
+  reason?: string;
+}
+
+export interface LogsResponse {
+  logs: Array<{
+    id: number;
+    turn: number;
     islandId: string;
     message: string;
   }>;

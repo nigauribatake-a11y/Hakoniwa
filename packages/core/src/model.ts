@@ -34,6 +34,13 @@ export interface Cell {
   y: number;
   terrain: TerrainKind;
   value: number;
+  workKind?: CommandKind;
+  workRemaining?: number;
+  workTotal?: number;
+  workArg?: number;
+  monsterKind?: string;
+  monsterActionRemaining?: number;
+  monsterActionTotal?: number;
 }
 
 export interface CommandPlan {
@@ -89,6 +96,8 @@ export interface RandomSource {
 
 export interface GameRules {
   turnSeconds: number;
+  smallTurnSeconds: number;
+  majorTurnEverySmallTurns: number;
   commandQueueLength: number;
   initialMoney: number;
   initialFood: number;
@@ -113,4 +122,20 @@ export interface GameRules {
   initialMountains: number;
   initialMissileBases: number;
   commandCosts: Record<CommandKind, number>;
+  commandDurations: Record<CommandKind, number>;
+}
+
+export interface CommandEvaluation {
+  command: CommandKind;
+  cost: number;
+  duration: number;
+  canExecute: boolean;
+  reason?: string;
+}
+
+export interface MonsterActionEvaluation {
+  canAct: boolean;
+  remainingTurns: number;
+  totalTurns: number;
+  reason?: string;
 }
