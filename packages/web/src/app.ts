@@ -51,6 +51,20 @@ const terrainGlyphs: Record<string, string> = {
   monument: "碑"
 };
 
+const terrainImages: Record<string, string> = {
+  sea: "/assets/terrain/sea.gif",
+  waste: "/assets/terrain/waste.gif",
+  plains: "/assets/terrain/plains.gif",
+  town: "/assets/terrain/town.gif",
+  forest: "/assets/terrain/forest.gif",
+  farm: "/assets/terrain/farm.gif",
+  factory: "/assets/terrain/factory.gif",
+  mountain: "/assets/terrain/mountain.gif",
+  missileBase: "/assets/terrain/missile-base.gif",
+  defence: "/assets/terrain/defence.gif",
+  monument: "/assets/terrain/monument.gif"
+};
+
 const commandKinds = Object.keys(commandLabels) as CommandKind[];
 const defaultApiBase = localStorage.getItem("hakoniwa.apiBase") ?? "http://127.0.0.1:3000";
 
@@ -234,6 +248,7 @@ function renderMap(island: Island): void {
       button.style.setProperty("--x", String(cell.x));
       button.style.setProperty("--y", String(cell.y));
       button.style.setProperty("--row-offset", cell.y % 2 === 0 ? "0" : "0.5");
+      button.style.setProperty("--terrain-image", `url("${terrainImages[cell.terrain] ?? ""}")`);
       button.dataset.selected = String(cell.x === selectedCell.x && cell.y === selectedCell.y);
       button.dataset.working = String(Boolean(cell.workKind));
       button.title = `${terrainLabels[cell.terrain]} (${cell.x}, ${cell.y}) value=${cell.value}`;

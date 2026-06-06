@@ -178,27 +178,30 @@ button:disabled {
 }
 
 .map {
-  --hex-w: 54px;
-  --hex-h: 46px;
+  --cell-w: 40px;
+  --cell-h: 32px;
   position: relative;
-  width: calc(var(--hex-w) * 12 + var(--hex-w) * 0.5);
-  height: calc(var(--hex-h) * 9.4);
+  width: calc(var(--cell-w) * 12 + var(--cell-w) * 0.5);
+  height: calc(var(--cell-h) * 12);
   max-width: 100%;
   margin: 0 auto;
 }
 
 .cell {
   position: absolute;
-  left: calc(var(--x) * var(--hex-w) + var(--row-offset) * var(--hex-w));
-  top: calc(var(--y) * var(--hex-h) * 0.76);
-  width: var(--hex-w);
+  left: calc(var(--x) * var(--cell-w) + var(--row-offset) * var(--cell-w));
+  top: calc(var(--y) * var(--cell-h));
+  width: var(--cell-w);
   min-width: 0;
   min-height: 0;
-  height: var(--hex-h);
+  height: var(--cell-h);
   padding: 0;
   border-radius: 0;
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  clip-path: polygon(25% 2%, 75% 2%, 100% 50%, 75% 98%, 25% 98%, 0 50%);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background-image: var(--terrain-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
   color: rgba(0, 0, 0, 0.72);
   font-weight: 700;
   line-height: 1;
@@ -410,8 +413,8 @@ button:disabled {
   }
 
   .map {
-    --hex-w: 34px;
-    --hex-h: 30px;
+    --cell-w: 28px;
+    --cell-h: 22px;
   }
 
   .cell {
